@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>Monsterpatch_CatchBottleRates_Patcher</AssemblyName>
+    <RootNamespace>Monsterpatch.CatchBottleRates.Patcher</RootNamespace>
+    <Version>0.1.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+    <InformationalVersion>v0.1.0</InformationalVersion>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+
+    <!--
+      Default Monsterpatch_Mods shared-lib layout:
+        C:\Monsterpatch_Mods\lib
+        C:\Monsterpatch_Mods\Monsterpatch_CatchBottleRates_Patcher_Source_v0.1.0_Final\src\Monsterpatch_CatchBottleRates_Patcher.csproj
+
+      From this csproj, the shared lib folder is two levels up: ..\..\lib.
+      You can override this with:
+        dotnet build src\Monsterpatch_CatchBottleRates_Patcher.csproj -c Release -p:SharedLibDir="C:\Monsterpatch_Mods\lib"
+    -->
+    <SharedLibDir Condition="'$(SharedLibDir)' == ''">$(MSBuildProjectDirectory)\..\..\lib</SharedLibDir>
+
+    <!-- Optional fallback only. The shared lib folder is preferred. -->
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Monsterpatch</GameDir>
+
+    <MonoCecilDll Condition="'$(MonoCecilDll)' == '' and Exists('$(SharedLibDir)\Mono.Cecil.dll')">$(SharedLibDir)\Mono.Cecil.dll</MonoCecilDll>
+    <MonoCecilDll Condition="'$(MonoCecilDll)' == ''">$(GameDir)\BepInEx\core\Mono.Cecil.dll</MonoCecilDll>
+  </PropertyGroup>
+
+  <Target Name="ValidateMonsterpatchReferences" BeforeTargets="ResolveReferences">
+    <Message Importance="high" Text="Monsterpatch_CatchBottleRates_Patcher shared lib: $(SharedLibDir)" />
+    <Error Condition="!Exists('$(MonoCecilDll)')" Text="Missing Mono.Cecil.dll. Put it in $(SharedLibDir), or build with -p:GameDir=&quot;path to Monsterpatch&quot;. Expected: $(MonoCecilDll)" />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="Mono.Cecil">
+      <HintPath>$(MonoCecilDll)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="CopyToDist" AfterTargets="Build">
+    <MakeDir Directories="$(MSBuildProjectDirectory)\..\dist\BepInEx\patchers" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(MSBuildProjectDirectory)\..\dist\BepInEx\patchers" />
+  </Target>
+</Project>
