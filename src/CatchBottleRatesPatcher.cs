@@ -10,12 +10,12 @@ namespace Monsterpatch.CatchBottleRates.Patcher
     /// BepInEx 5 preloader patcher.
     /// Install the built DLL in BepInEx\patchers, not BepInEx\plugins.
     ///
-    /// v0.1.0 final build:
+    /// v0.2.0 final build:
     ///   - All bottle multipliers stay vanilla/effectively 1.00x.
     ///   - Special bottles add flat house-affinity catch bonuses only.
     ///   - One matching active house gives +15 percentage points.
     ///   - Two matching active houses gives +25 percentage points.
-    ///   - Final catch chance is capped at 95%.
+    ///   - Bottle bonus is capped at 95%, without reducing vanilla chance.
     ///   - The EASY / MEDIUM / HARD / VERY HARD preview text updates immediately when bottles change.
     /// </summary>
     public static class CatchBottleRatesPatcher
@@ -32,7 +32,7 @@ namespace Monsterpatch.CatchBottleRates.Patcher
 
         public static void Initialize()
         {
-            Log("v0.1.0 final house-affinity preloader patcher initialized.");
+            Log("v0.2.0 final house-affinity preloader patcher initialized.");
         }
 
         public static void Finish()
@@ -77,10 +77,10 @@ namespace Monsterpatch.CatchBottleRates.Patcher
             if (InjectPreviewPostfix(gameScript, "ChangeBottle", refreshPreview))
                 patchedMethods++;
 
-            if (patchedMethods < 3)
+            if (patchedMethods != 4)
                 throw new InvalidOperationException("Catch bottle patch did not patch enough methods. Patched count: " + patchedMethods);
 
-            Log("Patched Assembly-CSharp.dll. Final house-affinity catch bonuses and immediate preview refresh are active.");
+            Log("Patched Assembly-CSharp.dll: 4/4 hooks active. Beta base rates 90/70/40/15; cafe-adjusted preview; existing bottle IDs 109-113.");
         }
 
         private static RequiredGameRefs ResolveGameRefs(ModuleDefinition module, TypeDefinition gameScript, TypeDefinition mon, TypeDefinition monScriptableObject)
@@ -94,6 +94,20 @@ namespace Monsterpatch.CatchBottleRates.Patcher
             refs.CurInteractingMonField = FindField(gameScript, "curInteractingMon");
             refs.TxtPreviewCatchDifficultyField = FindField(gameScript, "txtPreviewCatchDifficulty");
             refs.SetColorMethod = FindMethod(gameScript, "SetColor");
+            refs.CatchDifficultyMethod = gameScript.Methods.FirstOrDefault(m => m.Name == "CatchDifficultyOf" && m.Parameters.Count == 1 && m.Parameters[0].ParameterType.FullName == mon.FullName && m.ReturnType.FullName == "System.Int32");
+            refs.CafeMultiplierMethod = gameScript.Methods.FirstOrDefault(m => m.Name == "CafeMultiplier" && m.Parameters.Count == 1 && m.Parameters[0].ParameterType.Name == "CafeBonus" && m.ReturnType.FullName == "System.Single");
+            TypeDefinition cafeBonus = FindType(module, "CafeBonus");
+            FieldDefinition catchChance = cafeBonus == null ? null : FindField(cafeBonus, "CatchChance");
+            if (refs.CatchDifficultyMethod == null || refs.CafeMultiplierMethod == null || catchChance == null || !catchChance.HasConstant)
+                throw new InvalidOperationException("Expected beta CatchDifficultyOf/CafeMultiplier/CatchChance members not found.");
+            refs.CafeCatchChance = Convert.ToInt32(catchChance.Constant);
+            TypeDefinition catchMachine = gameScript.NestedTypes.FirstOrDefault(t => t.Name.IndexOf("TryToCatchWildMon2", StringComparison.Ordinal) >= 0);
+            MethodDefinition moveNext = catchMachine == null ? null : FindMethod(catchMachine, "MoveNext");
+            if (moveNext == null || !moveNext.HasBody)
+                throw new MissingMethodException("Beta catch coroutine MoveNext");
+            refs.RoundToInt = moveNext.Body.Instructions.Select(i => i.Operand as MethodReference).FirstOrDefault(m => m != null && m.DeclaringType.FullName == "UnityEngine.Mathf" && m.Name == "RoundToInt" && m.Parameters.Count == 1 && m.Parameters[0].ParameterType.FullName == "System.Single");
+            if (refs.RoundToInt == null)
+                throw new MissingMethodException("Mathf.RoundToInt in beta catch coroutine");
             refs.MonScriptableObjectField = FindField(mon, "monScriptableObject");
             refs.IsShinyField = FindField(mon, "isShiny");
             refs.MonIdField = FindField(monScriptableObject, "id");
@@ -139,7 +153,7 @@ namespace Monsterpatch.CatchBottleRates.Patcher
         {
             TypeDefinition existing = module.Types.FirstOrDefault(t => t.Namespace == HelperNamespace && t.Name == HelperName);
             if (existing != null)
-                module.Types.Remove(existing);
+                throw new InvalidOperationException("Catch bottle helper already present; remove duplicate patchers.");
 
             TypeDefinition helper = new TypeDefinition(
                 HelperNamespace,
@@ -427,6 +441,14 @@ namespace Monsterpatch.CatchBottleRates.Patcher
             il.Append(Instruction.Create(OpCodes.Call, getHouseMatchCount));
             il.Append(Instruction.Create(OpCodes.Stloc_0));
 
+            // Preserve vanilla chance for unmatched bottles or already-high cafe-adjusted odds.
+            Instruction returnBase = Instruction.Create(OpCodes.Ldarg_0);
+            il.Append(Instruction.Create(OpCodes.Ldloc_0));
+            il.Append(Instruction.Create(OpCodes.Brfalse, returnBase));
+            il.Append(Instruction.Create(OpCodes.Ldarg_0));
+            il.Append(LoadInt(95));
+            il.Append(Instruction.Create(OpCodes.Bge, returnBase));
+
             // adjusted = baseChance + GetHouseBonusForMatchCount(matchCount);
             il.Append(Instruction.Create(OpCodes.Ldarg_0));
             il.Append(Instruction.Create(OpCodes.Ldloc_0));
@@ -440,6 +462,8 @@ namespace Monsterpatch.CatchBottleRates.Patcher
             il.Append(LoadInt(95));
             il.Append(Instruction.Create(OpCodes.Call, clamp));
             il.Append(Instruction.Create(OpCodes.Ret));
+            il.Append(returnBase);
+            il.Append(Instruction.Create(OpCodes.Ret));
             method.Body.MaxStackSize = 4;
             return method;
         }
@@ -452,9 +476,10 @@ namespace Monsterpatch.CatchBottleRates.Patcher
 
             ILProcessor il = method.Body.GetILProcessor();
             AppendIntReturnCase(il, 0, 90);
-            AppendIntReturnCase(il, 1, 60);
-            AppendIntReturnCase(il, 2, 30);
-            il.Append(Instruction.Create(OpCodes.Ldc_I4_S, (sbyte)10));
+            AppendIntReturnCase(il, 1, 70);
+            AppendIntReturnCase(il, 2, 40);
+            AppendIntReturnCase(il, 3, 15);
+            il.Append(Instruction.Create(OpCodes.Ldc_I4_0));
             il.Append(Instruction.Create(OpCodes.Ret));
             return method;
         }
@@ -477,16 +502,16 @@ namespace Monsterpatch.CatchBottleRates.Patcher
             il.Append(Instruction.Create(OpCodes.Ldc_I4_0));
             il.Append(Instruction.Create(OpCodes.Ret));
 
-            // if finalChance >= 60 return 1;
+            // if finalChance >= 70 return 1;
             il.Append(checkMedium);
-            il.Append(Instruction.Create(OpCodes.Ldc_I4_S, (sbyte)60));
+            il.Append(Instruction.Create(OpCodes.Ldc_I4_S, (sbyte)70));
             il.Append(Instruction.Create(OpCodes.Blt, checkHard));
             il.Append(Instruction.Create(OpCodes.Ldc_I4_1));
             il.Append(Instruction.Create(OpCodes.Ret));
 
-            // if finalChance >= 30 return 2;
+            // if finalChance >= 40 return 2;
             il.Append(checkHard);
-            il.Append(Instruction.Create(OpCodes.Ldc_I4_S, (sbyte)30));
+            il.Append(Instruction.Create(OpCodes.Ldc_I4_S, (sbyte)40));
             il.Append(Instruction.Create(OpCodes.Blt, returnVeryHard));
             il.Append(Instruction.Create(OpCodes.Ldc_I4_2));
             il.Append(Instruction.Create(OpCodes.Ret));
@@ -617,15 +642,33 @@ namespace Monsterpatch.CatchBottleRates.Patcher
             il.Append(Instruction.Create(OpCodes.Ldfld, refs.TxtPreviewCatchDifficultyField));
             il.Append(Instruction.Create(OpCodes.Brfalse, ret));
 
-            // difficulty = monScriptableObject.catchDifficulty;
-            il.Append(Instruction.Create(OpCodes.Ldloc_1));
-            il.Append(Instruction.Create(OpCodes.Ldfld, refs.CatchDifficultyField));
+            // Use the same effective difficulty as the beta's actual capture roll.
+            il.Append(Instruction.Create(OpCodes.Ldarg_0));
+            il.Append(Instruction.Create(OpCodes.Ldloc_0));
+            il.Append(Instruction.Create(OpCodes.Call, refs.CatchDifficultyMethod));
             il.Append(Instruction.Create(OpCodes.Stloc_2));
 
             // baseChance = GetBaseChanceForDifficulty(difficulty);
             il.Append(Instruction.Create(OpCodes.Ldloc_2));
             il.Append(Instruction.Create(OpCodes.Call, getBaseChance));
             il.Append(Instruction.Create(OpCodes.Stloc_3));
+
+            // Apply vanilla cafe rounding and 100% ceiling before the bottle bonus.
+            il.Append(Instruction.Create(OpCodes.Ldloc_3));
+            il.Append(Instruction.Create(OpCodes.Conv_R4));
+            il.Append(Instruction.Create(OpCodes.Ldarg_0));
+            il.Append(LoadInt(refs.CafeCatchChance));
+            il.Append(Instruction.Create(OpCodes.Call, refs.CafeMultiplierMethod));
+            il.Append(Instruction.Create(OpCodes.Mul));
+            il.Append(Instruction.Create(OpCodes.Call, module.ImportReference(refs.RoundToInt)));
+            il.Append(Instruction.Create(OpCodes.Stloc_3));
+            Instruction cafeDone = Instruction.Create(OpCodes.Nop);
+            il.Append(Instruction.Create(OpCodes.Ldloc_3));
+            il.Append(LoadInt(100));
+            il.Append(Instruction.Create(OpCodes.Ble, cafeDone));
+            il.Append(LoadInt(100));
+            il.Append(Instruction.Create(OpCodes.Stloc_3));
+            il.Append(cafeDone);
 
             // finalChance = CalculateFinalChance(baseChance, gameScript.curBottleId, mon);
             il.Append(Instruction.Create(OpCodes.Ldloc_3));
@@ -723,6 +766,7 @@ namespace Monsterpatch.CatchBottleRates.Patcher
                 for (int p = 0; p < patch.Count; p++)
                     il.InsertBefore(target, patch[p]);
 
+                WidenShortBranches(moveNext.Body);
                 moveNext.Body.MaxStackSize = Math.Max(moveNext.Body.MaxStackSize, 4);
                 Log("Patched real catch roll in " + catchStateMachine.Name + ".MoveNext.");
                 return true;
@@ -753,13 +797,40 @@ namespace Monsterpatch.CatchBottleRates.Patcher
             ILProcessor il = method.Body.GetILProcessor();
             foreach (Instruction ret in returns)
             {
-                il.InsertBefore(ret, Instruction.Create(OpCodes.Ldarg_0));
+                Instruction first = Instruction.Create(OpCodes.Ldarg_0);
+                RedirectBranches(method.Body, ret, first);
+                il.InsertBefore(ret, first);
                 il.InsertBefore(ret, Instruction.Create(OpCodes.Call, refreshPreview));
             }
 
+            WidenShortBranches(method.Body);
             method.Body.MaxStackSize = Math.Max(method.Body.MaxStackSize, 4);
             Log("Patched preview refresh postfix in GameScript." + methodName + ".");
             return true;
+        }
+
+        private static void WidenShortBranches(MethodBody body)
+        {
+            foreach (Instruction i in body.Instructions)
+            {
+                switch (i.OpCode.Code)
+                {
+                    case Code.Br_S: i.OpCode = OpCodes.Br; break;
+                    case Code.Brfalse_S: i.OpCode = OpCodes.Brfalse; break;
+                    case Code.Brtrue_S: i.OpCode = OpCodes.Brtrue; break;
+                    case Code.Beq_S: i.OpCode = OpCodes.Beq; break;
+                    case Code.Bge_S: i.OpCode = OpCodes.Bge; break;
+                    case Code.Bge_Un_S: i.OpCode = OpCodes.Bge_Un; break;
+                    case Code.Bgt_S: i.OpCode = OpCodes.Bgt; break;
+                    case Code.Bgt_Un_S: i.OpCode = OpCodes.Bgt_Un; break;
+                    case Code.Ble_S: i.OpCode = OpCodes.Ble; break;
+                    case Code.Ble_Un_S: i.OpCode = OpCodes.Ble_Un; break;
+                    case Code.Blt_S: i.OpCode = OpCodes.Blt; break;
+                    case Code.Blt_Un_S: i.OpCode = OpCodes.Blt_Un; break;
+                    case Code.Bne_Un_S: i.OpCode = OpCodes.Bne_Un; break;
+                    case Code.Leave_S: i.OpCode = OpCodes.Leave; break;
+                }
+            }
         }
 
         private static void RedirectBranches(MethodBody body, Instruction oldTarget, Instruction newTarget)
@@ -892,6 +963,10 @@ namespace Monsterpatch.CatchBottleRates.Patcher
             public FieldDefinition HousesField;
             public FieldDefinition HousesShinyField;
 
+            public MethodDefinition CatchDifficultyMethod;
+            public MethodDefinition CafeMultiplierMethod;
+            public MethodReference RoundToInt;
+            public int CafeCatchChance;
             public MethodDefinition SetColorMethod;
             public MethodReference SetColorRef;
             public MethodReference TmpTextSetTextMethod;

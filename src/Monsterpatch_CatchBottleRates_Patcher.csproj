@@ -3,17 +3,17 @@
     <TargetFramework>net472</TargetFramework>
     <AssemblyName>Monsterpatch_CatchBottleRates_Patcher</AssemblyName>
     <RootNamespace>Monsterpatch.CatchBottleRates.Patcher</RootNamespace>
-    <Version>0.1.0</Version>
-    <AssemblyVersion>0.1.0.0</AssemblyVersion>
-    <FileVersion>0.1.0.0</FileVersion>
-    <InformationalVersion>v0.1.0</InformationalVersion>
+    <Version>0.2.0</Version>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+    <InformationalVersion>v0.2.0</InformationalVersion>
     <LangVersion>7.3</LangVersion>
     <Nullable>disable</Nullable>
 
     <!--
       Default Monsterpatch_Mods shared-lib layout:
         C:\Monsterpatch_Mods\lib
-        C:\Monsterpatch_Mods\Monsterpatch_CatchBottleRates_Patcher_Source_v0.1.0_Final\src\Monsterpatch_CatchBottleRates_Patcher.csproj
+        C:\Monsterpatch_Mods\Monsterpatch_CatchBottleRates_Patcher_Source_v0.2.0_Final\src\Monsterpatch_CatchBottleRates_Patcher.csproj
 
       From this csproj, the shared lib folder is two levels up: ..\..\lib.
       You can override this with:
@@ -40,8 +40,8 @@
     </Reference>
   </ItemGroup>
 
-  <Target Name="CopyToDist" AfterTargets="Build">
-    <MakeDir Directories="$(MSBuildProjectDirectory)\..\dist\BepInEx\patchers" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(MSBuildProjectDirectory)\..\dist\BepInEx\patchers" />
+  <Target Name="CopyToRelease" AfterTargets="Build">
+    <MakeDir Directories="$(MSBuildProjectDirectory)\..\Release\BepInEx\patchers" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(MSBuildProjectDirectory)\..\Release\BepInEx\patchers" />
   </Target>
 </Project>

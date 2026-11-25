@@ -1,121 +1,27 @@
-# Monsterpatch Catch Bottle Rates Patcher
+# Monsterpatch Bottle House Modifiers v0.2.0
 
-Monsterpatch Catch Bottle Rates Patcher is a BepInEx 5 preloader patcher for Monsterpatch. It makes capture bottles matter by giving special bottles house-affinity catch bonuses and by updating the visible catch difficulty text as soon as the selected bottle changes.
+BepInEx 5 preloader patcher for the November 24, 2026 Monsterpatch beta dump. This is a patcher, not a plugin.
 
-This is a patcher, not a plugin. Install the built DLL in `BepInEx\patchers`.
+## Capture rules
 
-## Version
+Beta base catch chances: EASY 90%, MEDIUM 70%, HARD 40%, VERY HARD 15%. The game applies its cafe bonus and rounding first. Matching one active house adds 15 percentage points; matching two adds 25. The bottle bonus is capped at 95%, but never reduces the vanilla chance. Unmatched bottles retain vanilla odds. Shiny houses are used when present.
 
-`v0.1.0`
+| Bottle | Houses |
+| --- | --- |
+| Diamond (109) | ATLANTIAN, IRONCLAD |
+| Heart (110) | WHIMSICAL, MYSTIC |
+| Guild (111) | FIREBORN, BRAWLER |
+| Void (112) | NIGHTWATCH, DRAGOON |
+| Spice (113) | OVERGROWTH, FIREBORN |
 
-## What it does
+Basic bottle 108 and IDs 114–125 receive no added affinity; no new mappings have been verified. The preview uses beta effective difficulty and cafe rounding, with tier thresholds of 90/70/40. Tier text need not change for every bonus within a tier.
 
-Vanilla Monsterpatch uses the mon's base catch difficulty only:
+## Build and install
 
-| Catch text | Base chance |
-|---|---:|
-| EASY | 90% |
-| MEDIUM | 60% |
-| HARD | 30% |
-| VERY HARD | 10% |
+Run `build.bat` from the repository. Requires .NET SDK and Mono.Cecil.dll from BepInEx 5, either in sibling `lib` or the default Steam game's BepInEx/core directory. Optional arguments: `build.bat "path to lib" "path to Monsterpatch"`.
 
-This patcher keeps those base rates, then applies a flat bonus when the selected bottle matches one or both of the mon's active houses.
+Output: `Release/BepInEx/patchers/Monsterpatch_CatchBottleRates_Patcher.dll`.
 
-| Match type | Bonus |
-|---|---:|
-| No matching house | +0% |
-| One matching house | +15% |
-| Two matching houses | +25% |
+Drag the BepInEx folder into the game directory. Remove older copies first. Do not place the DLL in plugins.
 
-Final catch chance is capped at `95%`.
-
-The patcher also recalculates the preview text from the final catch chance, so switching bottles immediately updates the displayed `EASY`, `MEDIUM`, `HARD`, or `VERY HARD` text before attempting the catch.
-
-## Bottle affinity mapping
-
-| Bottle | Matching houses |
-|---|---|
-| Bottle | None |
-| Diamond Bottle | ATLANTIAN, IRONCLAD |
-| Heart Bottle | WHIMSICAL, MYSTIC |
-| Guild Bottle | FIREBORN, BRAWLER |
-| Void Bottle | NIGHTWATCH, DRAGOON |
-| Spice Bottle | OVERGROWTH, FIREBORN |
-
-Bottle multipliers are intentionally not used in this release. All bottles stay at the normal `1.00x` base rate, with only the house-affinity bonus changing the final catch chance.
-
-## Shiny house support
-
-The patcher follows the game's active-house behavior:
-
-- normal mons use `MonScriptableObject.houses`
-- shiny mons use `MonScriptableObject.housesShiny` when present
-
-That means a shiny mon can have different bottle affinities than its normal version.
-
-## Install
-
-Build the project, then copy:
-
-```text
-Monsterpatch_CatchBottleRates_Patcher.dll
-```
-
-into:
-
-```text
-Monsterpatch\BepInEx\patchers\
-```
-
-Do not install it in `BepInEx\plugins`.
-
-Remove any old test versions of this patcher before installing the final build, so only one catch bottle patcher is active.
-
-## Build
-
-Default source layout expected by the build scripts:
-
-```text
-C:\Monsterpatch_Mods\lib
-C:\Monsterpatch_Mods\Monsterpatch_CatchBottleRates_Patcher_Source_v0.1.0_Final
-```
-
-Required shared library file:
-
-```text
-C:\Monsterpatch_Mods\lib\Mono.Cecil.dll
-```
-
-You can copy `Mono.Cecil.dll` from:
-
-```text
-Monsterpatch\BepInEx\core\Mono.Cecil.dll
-```
-
-Build with:
-
-```bat
-build.bat
-```
-
-or:
-
-```powershell
-.\build.ps1
-```
-
-or directly:
-
-```bat
-dotnet build src\Monsterpatch_CatchBottleRates_Patcher.csproj -c Release
-```
-
-Build output is copied to:
-
-```text
-dist\BepInEx\patchers\Monsterpatch_CatchBottleRates_Patcher.dll
-```
-
-## Notes for publishing
-
-This repository is intended to contain source code, build scripts, README, and license only. Do not commit extracted Monsterpatch assets, decompiled game code, or built release DLLs directly into the source repository.
+The patcher requires all four hooks and logs their installation in the preloader console. This version targets the beta, not older game builds. Static comparison against the beta C# and IL is complete; compilation and gameplay testing remain to be performed locally.

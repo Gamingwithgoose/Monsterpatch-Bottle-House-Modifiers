@@ -1,41 +1,23 @@
 @echo off
 setlocal
-
-REM Shared-lib build for the normal Monsterpatch_Mods layout:
-REM   C:\Monsterpatch_Mods\lib
-REM   C:\Monsterpatch_Mods\Monsterpatch_CatchBottleRates_Patcher_Source_v0.1.0_Final
-REM
-REM Usage from inside this source folder:
-REM   build.bat
-REM
-REM Optional override:
-REM   build.bat "C:\Monsterpatch_Mods\lib"
-REM
-REM Game-folder fallback, if you do not use shared lib:
-REM   dotnet build src\Monsterpatch_CatchBottleRates_Patcher.csproj -c Release -p:GameDir="C:\Program Files (x86)\Steam\steamapps\common\Monsterpatch"
-
-set MOD_DIR=%~dp0
-for %%I in ("%MOD_DIR%..") do set MODS_ROOT=%%~fI
-
-set SHARED_LIB_DIR=%~1
-if "%SHARED_LIB_DIR%"=="" set SHARED_LIB_DIR=%MODS_ROOT%\lib
-
-echo Monsterpatch Catch Bottle Rates PRELOADER PATCHER build
-echo Version: v0.1.0 final
-echo Mods root: %MODS_ROOT%
-echo Shared lib: %SHARED_LIB_DIR%
-echo.
-
-dotnet build "%MOD_DIR%src\Monsterpatch_CatchBottleRates_Patcher.csproj" -c Release -p:SharedLibDir="%SHARED_LIB_DIR%"
-
+cd /d "%~dp0"
+set "LIB=%~1"
+if not defined LIB set "LIB=%~dp0..\lib"
+if not "%~2"=="" set "GAME=%~2"
+if not defined GAME set "GAME=C:\Program Files (x86)\Steam\steamapps\common\Monsterpatch"
+where dotnet >nul 2>&1
 if errorlevel 1 (
-  echo.
-  echo Build failed.
+  echo ERROR: Install the .NET SDK first.
   exit /b 1
 )
-
+echo Building Monsterpatch Bottle House Modifiers v0.2.0...
+dotnet build "src\Monsterpatch_CatchBottleRates_Patcher.csproj" -c Release -p:SharedLibDir="%LIB%" -p:GameDir="%GAME%"
+if errorlevel 1 exit /b 1
+if not exist "Release\BepInEx\patchers\Monsterpatch_CatchBottleRates_Patcher.dll" (
+  echo ERROR: Expected release DLL missing.
+  exit /b 1
+)
 echo.
-echo Build complete.
-echo Output copied to:
-echo   %MOD_DIR%dist\BepInEx\patchers\Monsterpatch_CatchBottleRates_Patcher.dll
-endlocal
+echo SUCCESS: Drag Release\BepInEx into your Monsterpatch game folder.
+echo %~dp0Release\BepInEx\patchers\Monsterpatch_CatchBottleRates_Patcher.dll
+exit /b 0
