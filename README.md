@@ -20,6 +20,8 @@ Basic bottle 108 and IDs 114–125 receive no added affinity; no new mappings ha
 
 Run `build.bat` from the repository. Requires .NET SDK and Mono.Cecil.dll from BepInEx 5, either in sibling `lib` or the default Steam game's BepInEx/core directory. Optional arguments: `build.bat "path to lib" "path to Monsterpatch"`.
 
+The batch launcher pauses after success or failure and writes the complete build output to `build.log` beside the launcher. A failed build removes the previous release DLL to avoid accidentally installing stale output.
+
 Output: `Release/BepInEx/patchers/Monsterpatch_CatchBottleRates_Patcher.dll`.
 
 Drag the BepInEx folder into the game directory. Remove older copies first. Do not place the DLL in plugins.
