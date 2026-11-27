@@ -10,13 +10,13 @@ namespace Monsterpatch.CatchBottleRates.Patcher
     /// BepInEx 5 preloader patcher.
     /// Install the built DLL in BepInEx\patchers, not BepInEx\plugins.
     ///
-    /// v0.2.0 final build:
+    /// v0.2.1 build:
     ///   - All bottle multipliers stay vanilla/effectively 1.00x.
     ///   - Special bottles add flat house-affinity catch bonuses only.
     ///   - One matching active house gives +15 percentage points.
     ///   - Two matching active houses gives +25 percentage points.
     ///   - Bottle bonus is capped at 95%, without reducing vanilla chance.
-    ///   - The EASY / MEDIUM / HARD / VERY HARD preview text updates immediately when bottles change.
+    ///   - The EASY / MEDIUM / HARD / VERY HARD preview text updates immediately when bottles change, including nominal house bonus suffix.
     /// </summary>
     public static class CatchBottleRatesPatcher
     {
@@ -32,7 +32,7 @@ namespace Monsterpatch.CatchBottleRates.Patcher
 
         public static void Initialize()
         {
-            Log("v0.2.0 final house-affinity preloader patcher initialized.");
+            Log("v0.2.1 house-affinity preloader patcher initialized.");
         }
 
         public static void Finish()
@@ -80,7 +80,7 @@ namespace Monsterpatch.CatchBottleRates.Patcher
             if (patchedMethods != 4)
                 throw new InvalidOperationException("Catch bottle patch did not patch enough methods. Patched count: " + patchedMethods);
 
-            Log("Patched Assembly-CSharp.dll: 4/4 hooks active. Beta base rates 90/70/40/15; cafe-adjusted preview; existing bottle IDs 109-113.");
+            Log("Patched Assembly-CSharp.dll: 4/4 hooks active. Beta base rates 90/70/40/15; cafe-adjusted preview; existing bottle IDs 109-113; house bonus preview suffix enabled.");
         }
 
         private static RequiredGameRefs ResolveGameRefs(ModuleDefinition module, TypeDefinition gameScript, TypeDefinition mon, TypeDefinition monScriptableObject)
@@ -172,7 +172,7 @@ namespace Monsterpatch.CatchBottleRates.Patcher
             MethodDefinition getDifficultyIndex = AddGetDifficultyIndexForFinalChanceMethod(module, helper);
             MethodDefinition getDifficultyName = AddGetDifficultyNameMethod(module, helper);
             AddApplyHouseBonusToChanceMethod(module, helper, refs, calculateFinalChance, clamp);
-            AddRefreshPreviewMethod(module, helper, refs, getBaseChance, calculateFinalChance, getDifficultyIndex, getDifficultyName);
+            AddRefreshPreviewMethod(module, helper, refs, getBaseChance, calculateFinalChance, getDifficultyIndex, getDifficultyName, getHouseMatchCount);
 
             Log("Injected runtime helper: " + HelperNamespace + "." + HelperName);
             return helper;
@@ -602,7 +602,8 @@ namespace Monsterpatch.CatchBottleRates.Patcher
             MethodDefinition getBaseChance,
             MethodDefinition calculateFinalChance,
             MethodDefinition getDifficultyIndex,
-            MethodDefinition getDifficultyName)
+            MethodDefinition getDifficultyName,
+            MethodDefinition getHouseMatchCount)
         {
             MethodDefinition method = NewStaticMethod("RefreshPreview", module.TypeSystem.Void);
             method.Parameters.Add(new ParameterDefinition("gameScript", ParameterAttributes.None, refs.GameScriptRef));
@@ -687,6 +688,33 @@ namespace Monsterpatch.CatchBottleRates.Patcher
             il.Append(Instruction.Create(OpCodes.Ldloc, method.Body.Variables[5]));
             il.Append(Instruction.Create(OpCodes.Call, getDifficultyName));
             il.Append(Instruction.Create(OpCodes.Stloc, method.Body.Variables[6]));
+
+            // Append the nominal house-affinity bonus, not the total capture chance.
+            // Keep the original TMP component, font, color and alignment.
+            Instruction noSuffix = Instruction.Create(OpCodes.Nop);
+            Instruction singleSuffix = Instruction.Create(OpCodes.Ldloc, method.Body.Variables[6]);
+            Instruction concat = Instruction.Create(OpCodes.Call,
+                module.ImportReference(typeof(string).GetMethod("Concat", new[] { typeof(string), typeof(string) })));
+            il.Append(Instruction.Create(OpCodes.Ldarg_0));
+            il.Append(Instruction.Create(OpCodes.Ldfld, refs.CurBottleIdField));
+            il.Append(Instruction.Create(OpCodes.Ldloc_0));
+            il.Append(Instruction.Create(OpCodes.Call, getHouseMatchCount));
+            // Reuse the difficulty local; it is no longer needed.
+            il.Append(Instruction.Create(OpCodes.Stloc_2));
+            il.Append(Instruction.Create(OpCodes.Ldloc_2));
+            il.Append(Instruction.Create(OpCodes.Ldc_I4_1));
+            il.Append(Instruction.Create(OpCodes.Blt, noSuffix));
+            il.Append(Instruction.Create(OpCodes.Ldloc_2));
+            il.Append(Instruction.Create(OpCodes.Ldc_I4_2));
+            il.Append(Instruction.Create(OpCodes.Blt, singleSuffix));
+            il.Append(Instruction.Create(OpCodes.Ldloc, method.Body.Variables[6]));
+            il.Append(Instruction.Create(OpCodes.Ldstr, " (+25%)"));
+            il.Append(Instruction.Create(OpCodes.Br, concat));
+            il.Append(singleSuffix);
+            il.Append(Instruction.Create(OpCodes.Ldstr, " (+15%)"));
+            il.Append(concat);
+            il.Append(Instruction.Create(OpCodes.Stloc, method.Body.Variables[6]));
+            il.Append(noSuffix);
 
             // gameScript.txtPreviewCatchDifficulty.text = text;
             il.Append(Instruction.Create(OpCodes.Ldarg_0));

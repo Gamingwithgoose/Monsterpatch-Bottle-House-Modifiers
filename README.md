@@ -1,4 +1,4 @@
-# Monsterpatch Bottle House Modifiers v0.2.0
+# Monsterpatch Bottle House Modifiers v0.2.1
 
 BepInEx 5 preloader patcher for the November 24, 2026 Monsterpatch beta dump. This is a patcher, not a plugin.
 
@@ -14,7 +14,7 @@ Beta base catch chances: EASY 90%, MEDIUM 70%, HARD 40%, VERY HARD 15%. The game
 | Void (112) | NIGHTWATCH, DRAGOON |
 | Spice (113) | OVERGROWTH, FIREBORN |
 
-Basic bottle 108 and IDs 114–125 receive no added affinity; no new mappings have been verified. The preview uses beta effective difficulty and cafe rounding, with tier thresholds of 90/70/40. Tier text need not change for every bonus within a tier.
+Basic bottle 108 and IDs 114–125 receive no added affinity; no new mappings have been verified. The preview uses beta effective difficulty and cafe rounding, with tier thresholds of 90/70/40. Tier text need not change for every bonus within a tier. The original in-game TextMeshPro catch difficulty label now appends ` (+15%)` for one matching house or ` (+25%)` for two. No suffix for an unmatched bottle. The suffix indicates the nominal affinity bonus, not the total capture chance or the actual gain after the 95% cap. The existing font, color, alignment and refresh hooks remain unchanged. The longer labels need an in-game layout check. Capture odds are unchanged.
 
 ## Build and install
 

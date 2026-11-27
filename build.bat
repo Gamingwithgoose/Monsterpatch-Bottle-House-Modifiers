@@ -10,7 +10,7 @@ if errorlevel 1 (
   echo ERROR: Install the .NET SDK first.
   exit /b 1
 )
-echo Building Monsterpatch Bottle House Modifiers v0.2.0...
+echo Building Monsterpatch Bottle House Modifiers v0.2.1...
 dotnet build "src\Monsterpatch_CatchBottleRates_Patcher.csproj" -c Release -p:SharedLibDir="%LIB%" -p:GameDir="%GAME%"
 if errorlevel 1 exit /b 1
 if not exist "Release\BepInEx\patchers\Monsterpatch_CatchBottleRates_Patcher.dll" (
